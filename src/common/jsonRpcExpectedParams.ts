@@ -1,4 +1,4 @@
 export interface JsonRpcExpectedParams {
-    positionalParams?: boolean | number;
-    namedParams?: boolean | string[];
+  positionalParams?: boolean | number;
+  namedParams?: boolean | string[];
 }
