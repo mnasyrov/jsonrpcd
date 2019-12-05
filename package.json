@@ -1,0 +1,48 @@
+{
+  "private": true,
+  "name": "jsonrpcd",
+  "description": "Dispatcher for JSON RPC 2.0",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": {
+    "name": "Mikhail Nasyrov",
+    "email": "mikhail@mnasyrov.com",
+    "url": "https://github.com/mnasyrov"
+  },
+  "homepage": "https://github.com/mnasyrov/jsonrpcd",
+  "bugs": "https://github.com/mnasyrov/jsonrpcd/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mnasyrov/jsonrpcd.git"
+  },
+  "keywords": [
+    "json-rpc",
+    "dispatcher"
+  ],
+  "source": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.module.js",
+  "umd:main": "dist/index.umd.js",
+  "unpkg": "dist/index.umd.js",
+  "scripts": {
+    "clean": "rm -rf build dist",
+    "lint": "npm run lint:prettier && npm run lint:tslint",
+    "lint:prettier": "prettier --list-different \"src/**/*.ts\"",
+    "lint:tslint": "tslint \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "jest",
+    "build": "microbundle --name pubsub --sourcemap false --no-compress",
+    "release": "standard-version",
+    "prepublishOnly": "npm run clean && npm run lint && npm run test && npm run build",
+    "do-publish": "npm publish --access public"
+  },
+  "devDependencies": {
+    "microbundle": "0.12.0-next.6",
+    "typescript": "3.7.3",
+    "zora": "3.1.6",
+    "prettier": "1.19.1",
+    "standard-version": "7.0.1",
+    "tslib": "1.10.0"
+  }
+}
