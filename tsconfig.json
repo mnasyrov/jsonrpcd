@@ -1,20 +1,5 @@
 {
-  "include": ["src/**/*.ts"],
-  "compilerOptions": {
-    "lib": ["es2015", "dom"],
-    "module": "es2015",
-    "moduleResolution": "node",
-    "outDir": "./build",
-    "target": "es5",
-    "declaration": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
-  }
-}
-
-
-{
-  "files": ["src/pubsub.ts"],
+  "files": ["src/index.ts"],
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
