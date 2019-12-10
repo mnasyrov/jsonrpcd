@@ -25,6 +25,9 @@
   "module": "dist/index.module.js",
   "umd:main": "dist/index.umd.js",
   "unpkg": "dist/index.umd.js",
+  "dependencies": {
+    "async": "3.1.0"
+  },
   "devDependencies": {
     "eslint": "6.7.2",
     "eslint-config-prettier": "6.7.0",

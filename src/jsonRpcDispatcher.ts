@@ -1,9 +1,3 @@
-import {JsonRpcExpectedParams} from '@mnt-libs/jsonrpc/src/common/jsonRpcExpectedParams';
-import {JsonRpcExposedMethod} from '@mnt-libs/jsonrpc/src/common/jsonRpcExposedMethod';
-import {JsonRpcInvocationException} from '@mnt-libs/jsonrpc/src/common/jsonRpcInvokeException';
-import {JsonRpcMethodHandler} from '@mnt-libs/jsonrpc/src/common/jsonRpcMethodHandler';
-import {JsonRpcMethodResponse} from '@mnt-libs/jsonrpc/src/common/jsonRpcMethodResponse';
-import {JsonRpcNotificationListener} from '@mnt-libs/jsonrpc/src/common/jsonRpcNotificationListener';
 import {
   JsonRpcError,
   JsonRpcErrorCode,
@@ -13,21 +7,26 @@ import {
   JsonRpcNotification,
   JsonRpcRequest,
   JsonRpcResponse,
-} from '@mnt-libs/jsonrpc/src/common/jsonRpcTypes';
-import {JsonRpcTransportAdapter} from '@mnt-libs/jsonrpc/src/jsonRpcTransportAdapter';
-import {LOGGING} from '@mnt-libs/logger/src/logging';
-import {ResultLatch} from '@mnt-libs/stdlib/src/async/resultLatch';
-import {Emitter} from '@mnt-libs/stdlib/src/pubsub/emitter';
-import {Publishers} from '@mnt-libs/stdlib/src/pubsub/publishers';
-import {SubscriptionSink} from '@mnt-libs/stdlib/src/pubsub/subscripitonSink';
-import {Transformers} from '@mnt-libs/stdlib/src/pubsub/transformers';
-import {Values} from '@mnt-libs/stdlib/src/values';
+} from './jsonRpcApi';
+import {
+  JsonRpcExpectedParams,
+  JsonRpcExposedMethod,
+  JsonRpcMethodHandler,
+  JsonRpcMethodResponse,
+  JsonRpcNotificationListener,
+} from './jsonRpcDispatcherTypes';
+import {JsonRpcTransportAdapter} from './jsonRpcTransportAdapter';
 
 const JSON_RPC_VERSION = '2.0';
 const PARSE_ERROR_EMISSION_THROTTLE_TIME = 500; // ms
 
+export interface Logger {
+  error(message: string): void;
+}
+
 export interface JsonRpcDispatcherOptions {
   messageIdFactory?: () => JsonRpcMessageId;
+  logger?: Logger;
 }
 
 /**
@@ -38,7 +37,7 @@ export interface JsonRpcDispatcherOptions {
  * - not strict validation of incoming messages.
  */
 export class JsonRpcDispatcher {
-  private readonly logger = LOGGING.getLogger('JsonRpcDispatcher');
+  private readonly logger: Logger;
 
   private readonly transportSubscriptions = new SubscriptionSink();
   private readonly pendingRequests = new Map<
@@ -50,16 +49,18 @@ export class JsonRpcDispatcher {
     string,
     JsonRpcNotificationListener
   >();
-  private messageIdCounter: number = 0;
+  private messageIdCounter = 0;
   private transport: JsonRpcTransportAdapter;
-  private readonly messageIdFactory: () => JsonRpcMessageId = () =>
-    this.defaultMessageIdFactory();
+  private readonly messageIdFactory: () => JsonRpcMessageId;
   private readonly parseErrorMessageEmitter = new Emitter<void>();
 
-  constructor(options?: JsonRpcDispatcherOptions) {
-    if (options && options.messageIdFactory) {
-      this.messageIdFactory = options.messageIdFactory;
-    }
+  constructor(options: JsonRpcDispatcherOptions = {}) {
+    const {
+      messageIdFactory = () => this.defaultMessageIdFactory(),
+      logger = {error: () => undefined},
+    } = options;
+    this.messageIdFactory = messageIdFactory;
+    this.logger = logger;
   }
 
   get isConnected(): boolean {
@@ -200,7 +201,7 @@ export class JsonRpcDispatcher {
   }
 
   private sendParseErrorMessage() {
-    this.sendMessage(RpcErrors.ParseErrorMessage);
+    this.sendMessage(ParseErrorMessage);
   }
 
   private async onNotification(notification: JsonRpcNotification) {
@@ -319,27 +320,25 @@ export class JsonRpcDispatcher {
     const isObject = Values.isObject(params);
 
     if (expected === true) {
-      return isArray || isObject ? null : RpcErrors.InvalidParamsError;
+      return isArray || isObject ? null : INVALID_PARAMS_ERROR;
     } else if (
       expected.positionalParams === true ||
       expected.positionalParams === 0 ||
       expected.positionalParams > 0
     ) {
       if (!isArray) {
-        return expected.positionalParams === 0
-          ? null
-          : RpcErrors.InvalidParamsError;
+        return expected.positionalParams === 0 ? null : INVALID_PARAMS_ERROR;
       }
       const positionalParams = params as any[];
       if (
         expected.positionalParams !== true &&
         expected.positionalParams > positionalParams.length
       ) {
-        return RpcErrors.InvalidParamsError;
+        return INVALID_PARAMS_ERROR;
       }
     } else if (expected.namedParams) {
       if (!isObject) {
-        return RpcErrors.InvalidParamsError;
+        return INVALID_PARAMS_ERROR;
       }
       if (Values.isArray(expected.namedParams)) {
         const namedParams = params as {};
@@ -347,7 +346,7 @@ export class JsonRpcDispatcher {
           key => namedParams[key] === undefined,
         );
         if (invalid) {
-          return RpcErrors.InvalidParamsError;
+          return INVALID_PARAMS_ERROR;
         }
       }
     }
@@ -356,31 +355,29 @@ export class JsonRpcDispatcher {
   }
 }
 
-namespace RpcErrors {
-  export const ParseErrorMessage: Readonly<JsonRpcMessage> = {
+const ParseErrorMessage: Readonly<JsonRpcMessage> = {
+  jsonrpc: JSON_RPC_VERSION,
+  id: null,
+  error: {
+    code: JsonRpcErrorCode.ParseError,
+    message: 'Parse error',
+  },
+};
+
+const INVALID_PARAMS_ERROR: Readonly<JsonRpcError> = {
+  code: JsonRpcErrorCode.InvalidParams,
+  message: 'Invalid params',
+};
+
+function createMethodNotFoundResponse(
+  requestId: JsonRpcMessageId,
+): Readonly<JsonRpcResponse> {
+  return {
     jsonrpc: JSON_RPC_VERSION,
-    id: null,
+    id: requestId,
     error: {
-      code: JsonRpcErrorCode.ParseError,
-      message: 'Parse error',
+      code: JsonRpcErrorCode.MethodNotFound,
+      message: 'Method not found',
     },
   };
-
-  export const InvalidParamsError: Readonly<JsonRpcError> = {
-    code: JsonRpcErrorCode.InvalidParams,
-    message: 'Invalid params',
-  };
-
-  export function createMethodNotFoundResponse(
-    requestId: JsonRpcMessageId,
-  ): Readonly<JsonRpcResponse> {
-    return {
-      jsonrpc: JSON_RPC_VERSION,
-      id: requestId,
-      error: {
-        code: JsonRpcErrorCode.MethodNotFound,
-        message: 'Method not found',
-      },
-    };
-  }
 }
